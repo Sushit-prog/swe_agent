@@ -203,7 +203,15 @@ are safe to log; values never are).
 
 ---
 
-## 7. Documentation map
+## 7. Milestone map
+
+| Milestone | Status |
+|---|---|
+| M0 + M1 — architecture docs, project foundation | ✅ done |
+| M2 — GitHub issue ingestion (`swe run <issue-url>`) | ✅ done |
+| M3+ — workspaces, state machine execution, agents, LLM calls, PR flow | pending |
+
+## 8. Documentation map
 
 | Doc | Contents |
 |---|---|

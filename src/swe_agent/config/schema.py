@@ -15,6 +15,8 @@ Schema reference (also documented in docs/architecture.md §6):
         api_key_env: "ANTHROPIC_API_KEY"   # env VAR NAME, never the key itself
         temperature: 0.2
         max_tokens: 8192
+    github:
+      token_env: "GITHUB_TOKEN"  # env VAR NAME for the GitHub API token
 
 Unknown keys are rejected. Secrets are never stored in the config file.
 """
@@ -105,6 +107,14 @@ class ModelsConfig(BaseModel):
         return getattr(self, role)
 
 
+class GitHubConfig(BaseModel):
+    """GitHub API access. token_env is an env VAR NAME, never the token itself."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    token_env: str = "GITHUB_TOKEN"
+
+
 class SweAgentConfig(BaseSettings):
     """Root configuration. YAML overrides defaults; env vars (SWE_*) override YAML."""
 
@@ -117,6 +127,7 @@ class SweAgentConfig(BaseSettings):
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
     retries: RetryConfig = Field(default_factory=RetryConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
+    github: GitHubConfig = Field(default_factory=GitHubConfig)
 
 
 def load_config(path: Path | str | None = None) -> SweAgentConfig:
