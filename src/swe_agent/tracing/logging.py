@@ -17,7 +17,7 @@ _REDACTED = "[REDACTED]"
 # Patterns that indicate secret-bearing content. Values matching these are redacted.
 _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"sk-ant-[A-Za-z0-9_\-]{8,}"),          # Anthropic API keys
-    re.compile(r"gh[pousr]_[A-Za-z0-9]{20,}"),          # GitHub tokens
+    re.compile(r"gh[pousr]_[A-Za-z0-9]{8,}"),           # GitHub tokens
     re.compile(r"(?i)(authorization\s*[:=]\s*)\S+"),    # Authorization headers
     re.compile(
         r"(?i)((?:api[_-]?key|token|secret|password)\s*[:=]\s*)\S+"
@@ -64,9 +64,12 @@ def configure_logging(verbosity: int = 0) -> None:
         logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s")
     )
     handler.addFilter(SecretRedactionFilter())
+    handler._swe_agent = True  # tag so re-config removes only our handler
 
     root = logging.getLogger()
-    root.handlers.clear()
+    # Remove only handlers previously installed by this function; foreign
+    # handlers (e.g. pytest's caplog capture) are left intact.
+    root.handlers[:] = [h for h in root.handlers if not getattr(h, "_swe_agent", False)]
     root.addHandler(handler)
     root.setLevel(level)
 
