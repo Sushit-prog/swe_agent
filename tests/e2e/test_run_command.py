@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 from typer.testing import CliRunner
@@ -57,11 +58,53 @@ def _client_raising(exc: Exception):
         def fetch_issue(self, ref):
             raise exc
 
+        def get_repo_size_mb(self, owner, repo):
+            return 1.0
+
     return _Client
+
+
+def _stub_workspace(monkeypatch, ok: bool = True) -> None:
+    """Stub the M3 workspace phase so M2 tests focus on issue fetching."""
+    from swe_agent.workspace.errors import WorkspaceError
+    from swe_agent.workspace.manager import WorkspaceValidation
+
+    class _WS:
+        run_id = "20260101T000000Z-abcdef"
+        run_dir = Path("fake-run-dir")
+        repository = Path("fake-run-dir/repository")
+        state = Path("fake-run-dir/state")
+        logs = Path("fake-run-dir/logs")
+        traces = Path("fake-run-dir/traces")
+        artifacts = Path("fake-run-dir/artifacts")
+        run_json_path = Path("fake-run-dir/state/run.json")
+
+    monkeypatch.setattr(cli_main.manager, "create_run", lambda ref, config: _WS())
+    monkeypatch.setattr(
+        cli_main.manager,
+        "clone_repository",
+        lambda ws, config, github_client=None: {
+            "base_branch": "main",
+            "base_commit": "a" * 40,
+            "work_branch": "swe-agent/issue-7-x",
+        },
+    )
+    monkeypatch.setattr(
+        cli_main.manager,
+        "validate_workspace",
+        lambda ws, config=None: WorkspaceValidation(
+            ok=ok,
+            problems=[] if ok else ["working tree is not clean"],
+            head_branch="main",
+            head_commit="a" * 40,
+        ),
+    )
+    monkeypatch.setattr(cli_main.manager, "finalize_run", lambda ws: {"status": "workspace_ready"})
 
 
 def test_success_path(monkeypatch) -> None:
     monkeypatch.setattr(cli_main, "GitHubClient", _client_returning(_issue()))
+    _stub_workspace(monkeypatch)
     monkeypatch.setenv("COLUMNS", "200")
     result = runner.invoke(cli_main.app, ["run", URL])
     assert result.exit_code == 0
@@ -72,13 +115,14 @@ def test_success_path(monkeypatch) -> None:
     assert "bug" in result.output and "urgent" in result.output
     assert "Body text here." in result.output
     assert "untrusted" in result.output.lower()
-    assert "Pipeline not implemented yet (M3+)" in result.output
+    assert "Pipeline not implemented yet (M4+)" in result.output
     assert "Traceback" not in result.output
 
 
 def test_body_truncated_after_500_chars(monkeypatch) -> None:
     issue = _issue(body="A" * 600)
     monkeypatch.setattr(cli_main, "GitHubClient", _client_returning(issue))
+    _stub_workspace(monkeypatch)
     monkeypatch.setenv("COLUMNS", "400")
     result = runner.invoke(cli_main.app, ["run", URL])
     assert result.exit_code == 0

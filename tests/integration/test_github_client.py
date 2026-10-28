@@ -147,6 +147,14 @@ def test_404_without_token_mentions_private(fake_github) -> None:
         GitHubClient(token=None).fetch_issue(REF)
 
 
+def test_410_maps_to_deleted_or_transferred(fake_github) -> None:
+    fake_github.repo = _Repo(
+        _Issue(), GithubException(410, {"message": "Issues are disabled"})
+    )
+    with pytest.raises(NotFoundError, match="deleted or transferred"):
+        GitHubClient(token="tok").fetch_issue(REF)
+
+
 def test_429_maps_to_rate_limit_with_reset(fake_github) -> None:
     fake_github.repo = _Repo(
         _Issue(),

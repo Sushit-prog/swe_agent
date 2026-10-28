@@ -38,10 +38,12 @@ class SecretRedactionFilter(logging.Filter):
         return True
 
     @staticmethod
-    def _redact(text: str) -> str:
+    def _redact(text: object) -> str:
+        # Log args may be exceptions or other objects, not just strings.
+        s = text if isinstance(text, str) else str(text)
         for pattern in _SECRET_PATTERNS:
-            text = pattern.sub(_REDACTED, text)
-        return text
+            s = pattern.sub(_REDACTED, s)
+        return s
 
 
 def configure_logging(verbosity: int = 0) -> None:

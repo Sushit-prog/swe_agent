@@ -44,11 +44,19 @@ AGENT_ROLES = (
 
 
 class WorkspaceConfig(BaseModel):
-    """Where runs live. Default: ~/.swe-agent (runs under <root>/runs/<id>/)."""
+    """Where runs live. Default: ~/.swe-agent (runs under <root>/runs/<id>/).
+
+    clone_timeout_seconds: max time for the git clone subprocess.
+    max_repo_size_mb: refuse to clone repos larger than this (GitHub API
+        size is checked before cloning; if the lookup fails we warn and
+        proceed).
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     root: Path = Field(default=Path.home() / ".swe-agent")
+    clone_timeout_seconds: int = Field(default=120, ge=10, le=3600)
+    max_repo_size_mb: int = Field(default=500, ge=1, le=100_000)
 
     @field_validator("root")
     @classmethod

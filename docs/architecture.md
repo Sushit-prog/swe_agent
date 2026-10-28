@@ -174,6 +174,8 @@ file — only the *name of the environment variable* that holds them.
 # swe-agent.yaml — full schema with defaults
 workspace:
   root: "~/.swe-agent"          # runs live under <root>/runs/<run-id>/
+  clone_timeout_seconds: 120    # max git clone subprocess time
+  max_repo_size_mb: 500         # refuse larger repos before cloning
 
 retries:
   max_debug_attempts: 3         # TESTING→DEBUGGING→TESTING cycles per issue
@@ -209,7 +211,8 @@ are safe to log; values never are).
 |---|---|
 | M0 + M1 — architecture docs, project foundation | ✅ done |
 | M2 — GitHub issue ingestion (`swe run <issue-url>`) | ✅ done |
-| M3+ — workspaces, state machine execution, agents, LLM calls, PR flow | pending |
+| M3 — isolated run workspace + safe git clone | ✅ done |
+| M4+ — SQLite state, state-machine execution, agents, LLM calls, PR flow | pending |
 
 ## 8. Documentation map
 

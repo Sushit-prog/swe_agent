@@ -103,6 +103,21 @@ class GitHubClient:
             return datetime.now(timezone.utc)
         return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
+    def get_repo_size_mb(self, owner: str, repo: str) -> float:
+        """Return the repository size in MB as reported by the GitHub API.
+
+        Raises mapped typed errors on failure; callers decide whether a
+        failed lookup is fatal.
+        """
+        gh = self._build_github()
+        try:
+            repository = gh.get_repo(f"{owner}/{repo}")
+            size_kb = float(getattr(repository, "size", 0) or 0)
+        except Exception as exc:
+            ref = IssueRef(owner=owner, repo=repo, number=0)
+            raise self._map_exception(exc, ref) from exc
+        return size_kb / 1024.0
+
     def _map_exception(self, exc: Exception, ref: IssueRef) -> Exception:
         """Translate a PyGithub/network exception into a typed swe-agent error."""
         try:
@@ -124,6 +139,8 @@ class GitHubClient:
                         "(a token is required)"
                     )
                 return NotFoundError(f"issue {full_name}#{ref.number} not found")
+            if status == 410:
+                return NotFoundError("issue was deleted or transferred")
             if status == 429:
                 return RateLimitError(
                     "GitHub API rate limit exceeded",

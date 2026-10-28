@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 from typer.testing import CliRunner
 
@@ -51,6 +52,40 @@ class _FakeClient:
 def _invoke(monkeypatch, issue: IssueData):
     _FakeClient.data = issue
     monkeypatch.setattr(cli_main, "GitHubClient", _FakeClient)
+
+    # Stub the M3 workspace phase; these tests target display sanitization.
+    from swe_agent.workspace.manager import WorkspaceValidation
+
+    class _WS:
+        run_id = "20260101T000000Z-abcdef"
+        run_dir = Path("fake-run-dir")
+        repository = Path("fake-run-dir/repository")
+        state = Path("fake-run-dir/state")
+        logs = Path("fake-run-dir/logs")
+        traces = Path("fake-run-dir/traces")
+        artifacts = Path("fake-run-dir/artifacts")
+        run_json_path = Path("fake-run-dir/state/run.json")
+
+    monkeypatch.setattr(cli_main.manager, "create_run", lambda ref, config: _WS())
+    monkeypatch.setattr(
+        cli_main.manager,
+        "clone_repository",
+        lambda ws, config, github_client=None: {
+            "base_branch": "main",
+            "base_commit": "a" * 40,
+            "work_branch": "swe-agent/issue-1-x",
+        },
+    )
+    monkeypatch.setattr(
+        cli_main.manager,
+        "validate_workspace",
+        lambda ws, config=None: WorkspaceValidation(
+            ok=True, head_branch="main", head_commit="a" * 40
+        ),
+    )
+    monkeypatch.setattr(
+        cli_main.manager, "finalize_run", lambda ws: {"status": "workspace_ready"}
+    )
     monkeypatch.setenv("COLUMNS", "200")
     return runner.invoke(cli_main.app, ["run", "https://github.com/o/r/issues/1"])
 
