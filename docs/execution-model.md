@@ -23,8 +23,8 @@ CLI parse → config load → Run row (CREATED) → workspace provision
 1. **Entry.** `swe run` (future milestone) builds a `Run` from the issue
    reference and config. The run gets a unique `run-id` and a SQLite row.
 2. **Provisioning.** `workspace/` creates `~/.swe-agent/runs/<run-id>/`,
-   clones the target repo into `workspace/`, initializes `artifacts/`,
-   `state.db`, `trace.jsonl`.
+   clones the target repo into `workspace/`, initializes `artifacts/` and
+   `trace.jsonl`. Run state and audit rows live in the central DB (§4).
 3. **Loop.** The orchestrator, not the model, owns the loop. Each iteration:
    - Look up the agent registered for the current state.
    - Build that agent's context: trusted run/plan/budget data + fenced
@@ -105,21 +105,31 @@ path to `COMPLETED`:
 
 ## 4. Persistence (SQLite via SQLModel)
 
-One database file per run at `runs/<run-id>/state.db` (a workspace-root
-aggregate DB is a later option; per-run keeps isolation trivial).
+One central database at `~/.swe-agent/swe.db` (config: `database.path`), shared
+by all runs. This deliberately replaces the earlier per-run `state.db` design:
+the audit trail must outlive `swe clean`, which deletes only
+`<root>/runs/<run-id>/` and never touches DB rows.
 
 Core tables (shapes, not final DDL):
 
 | Table | Purpose | Key columns |
 |---|---|---|
-| `runs` | The run record | `id`, `issue_ref`, `state`, `debug_attempts_used`, `replan_attempts_used`, `created_at`, `updated_at` |
-| `steps` | Plan steps from the Planner | `id`, `run_id`, `ordinal`, `description`, `success_criteria`, `status` |
-| `events` | Append-only state-machine/agent events | `id`, `run_id`, `from_state`, `event`, `to_state`, `agent`, `payload_json`, `ts` |
-| `tool_calls` | Full tool audit trail | `id`, `run_id`, `agent`, `tool`, `capability`, `decision` (GRANT/DENY), `argv_or_path`, `exit_code`, `ts` |
+| `runs` | The run record and authoritative budgets | `id`, `issue_url`, `state`, `created_at`, `updated_at`, `debug_attempts_used`, `replan_attempts_used`, `rework_cycles_used`, `recovery_attempts_used`, `step_index`, `steps_total` |
+| `state_transitions` | Append-only state-machine audit | `id`, `run_id`, `from_state`, `to_state`, `event`, `reason`, `ts` |
+| `events` | Append-only agent/tool audit events | `id`, `run_id`, `seq`, `ts`, `actor`, `kind`, `payload_json` (`UNIQUE(run_id, seq)`) |
 
-Budgets live on `runs` (authoritative counters). The `events` table is the
-audit log: every transition is reconstructible. Model context never includes
-raw budget arithmetic — it receives human-readable summaries the orchestrator
+Budgets live on `runs` (authoritative counters). Transitions use compare-and-
+swap on the expected state, so a stale writer cannot overwrite a newer state.
+`state_transitions` and `events` are append-only, enforced by SQLite triggers
+that `RAISE(ABORT)` on `UPDATE`/`DELETE`; there is no update/delete repository
+API. `reason` and `payload_json` pass through the existing redaction filter;
+`payload_json` is capped at 64 KB with an explicit truncation marker.
+
+Connections enable foreign keys and WAL, and every transaction begins with
+`BEGIN IMMEDIATE` to serialize writers. New databases are created with file
+mode `0600` and `PRAGMA user_version = 1`; a mismatched version fails with a
+clear instruction to delete the dev DB. Model context never includes raw
+budget arithmetic — it receives human-readable summaries the orchestrator
 builds.
 
 ---
@@ -162,8 +172,10 @@ Rules:
 
 ## 7. Concurrency and idempotency (current stance)
 
-M0/M1 is single-run, synchronous. The design leaves room for concurrent runs
-(disjoint run directories, per-run DB) but the orchestrator loop itself is
-sequential per run: one agent active at a time, one state, deterministic
-ordering. Parallel tool execution is explicitly out of scope until there is a
-measured need — it complicates the audit trail for little gain at this stage.
+M0/M1 is single-run, synchronous. The persistence layer leaves room for
+concurrent runs: the central DB uses WAL plus `BEGIN IMMEDIATE` to serialize
+writers, and compare-and-swap transitions prevent stale writers from
+overwriting newer state. The orchestrator loop itself is sequential per run:
+one agent active at a time, one state, deterministic ordering. Parallel tool
+execution is explicitly out of scope until there is a measured need — it
+complicates the audit trail for little gain at this stage.

@@ -4,6 +4,8 @@ Schema reference (also documented in docs/architecture.md §6):
 
     workspace:
       root: "~/.swe-agent"
+    database:
+      path: "~/.swe-agent/swe.db"  # central DB; audit trail outlives runs
     retries:
       max_debug_attempts: 3
       max_replan_attempts: 2
@@ -59,6 +61,19 @@ class WorkspaceConfig(BaseModel):
     max_repo_size_mb: int = Field(default=500, ge=1, le=100_000)
 
     @field_validator("root")
+    @classmethod
+    def _expand(cls, v: Path) -> Path:
+        return v.expanduser()
+
+
+class DatabaseConfig(BaseModel):
+    """Location of the central SQLite database (shared by all runs)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    path: Path = Field(default=Path.home() / ".swe-agent" / "swe.db")
+
+    @field_validator("path")
     @classmethod
     def _expand(cls, v: Path) -> Path:
         return v.expanduser()
@@ -133,6 +148,7 @@ class SweAgentConfig(BaseSettings):
     )
 
     workspace: WorkspaceConfig = Field(default_factory=WorkspaceConfig)
+    database: DatabaseConfig = Field(default_factory=DatabaseConfig)
     retries: RetryConfig = Field(default_factory=RetryConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     github: GitHubConfig = Field(default_factory=GitHubConfig)

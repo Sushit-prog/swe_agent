@@ -271,6 +271,7 @@ def test_doctor_does_not_create_workspace_root(
 
 def test_doctor_reports_disk_space(monkeypatch, tmp_path: Path) -> None:
     cfg = SweAgentConfig(workspace={"root": str(tmp_path / "ws")})
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
     (tmp_path / "ws").mkdir()
     monkeypatch.setattr(cli_main, "load_config", lambda path=None: cfg)
     result = runner.invoke(cli_main.app, ["doctor"])

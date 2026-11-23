@@ -117,22 +117,22 @@ Layout:
 ```
 ~/.swe-agent/
 ├── config.yaml              # operator config (outside all runs)
+├── swe.db                   # central SQLite audit DB (outside all runs)
 └── runs/
     └── <run-id>/            # run-id: ULID/uuid-timestamp, unique per run
-        ├── workspace/       # the cloned target repo — agent's CWD
+        ├── repository/      # the cloned target repo — agent's CWD
         ├── artifacts/       # test logs, diffs, verification reports
-        ├── state.db         # SQLite run state (SQLModel)
         └── trace.jsonl      # structured event stream
 ```
 
 Invariants (enforced by `workspace/`, verified by runtime):
 
-- Every path-taking tool resolves against the run's `workspace/` and rejects
+- Every path-taking tool resolves against the run's `repository/` and rejects
   paths that escape it (symlink-aware `resolve()` containment check).
-- The agent's shell commands run with CWD = `workspace/` and inherit no
+- The agent's shell commands run with CWD = `repository/` and inherit no
   secrets except the specific API key env vars the active role needs.
-- `~/.swe-agent/config.yaml`, `state.db` of other runs, and the operator's
-  home are never writable by agent tools.
+- `~/.swe-agent/config.yaml`, `~/.swe-agent/swe.db`, and the operator's home
+  are never writable by agent tools.
 - Run teardown (later milestone) can archive or delete the entire run dir
   atomically.
 

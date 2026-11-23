@@ -15,7 +15,7 @@ from rich.table import Table
 from rich.text import Text
 
 from swe_agent import __version__
-from swe_agent.config.schema import SweAgentConfig, load_config
+from swe_agent.config.schema import AGENT_ROLES, SweAgentConfig, load_config
 from swe_agent.core.sanitize import sanitize_untrusted, truncate_after_sanitize
 from swe_agent.github.client import GitHubClient, IssueData
 from swe_agent.github.errors import (
@@ -96,6 +96,7 @@ def doctor() -> None:
 
     # Workspace root: existence, writability, free disk space.
     # Never creates the root — reports its state only.
+    config = None
     try:
         config = load_config()
         root = config.workspace.root
@@ -123,6 +124,26 @@ def doctor() -> None:
                 )
             except OSError as exc:
                 checks.append(("disk space", False, f"cannot stat: {exc}"))
+
+    if config is not None:
+        names: set[str] = set()
+        missing: set[str] = set()
+        for role in AGENT_ROLES:
+            name = config.models.for_role(role).api_key_env.strip()
+            if not name:
+                missing.add(f"{role}: no api_key_env configured")
+                continue
+            names.add(name)
+            if not os.environ.get(name):
+                missing.add(name)
+        if missing:
+            checks.append(
+                ("API key env vars", False, "not set: " + ", ".join(sorted(missing)))
+            )
+        else:
+            checks.append(
+                ("API key env vars", True, ", ".join(sorted(names)) + " set")
+            )
 
     table = Table(title="swe-agent doctor")
     table.add_column("Check", style="bold")

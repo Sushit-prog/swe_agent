@@ -2,8 +2,7 @@
 
 CLI-first autonomous Software Engineering Agent.
 
-> **Status:** M0/M1 — architecture docs and project foundation. No agent
-> logic, LLM calls, or GitHub integration yet.
+> **Status:** M0-M3 complete; M4+ in progress.
 
 ## Docs
 

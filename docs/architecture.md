@@ -5,8 +5,7 @@
 implements, tests, reviews, and opens a pull request — with hard safety bounds
 enforced outside the LLM.
 
-> **Status:** M0/M1 — architecture and project foundation only. No agent logic,
-> LLM calls, or GitHub integration is implemented yet.
+> **Status:** M0-M3 complete; M4+ in progress.
 
 ---
 
@@ -176,6 +175,9 @@ workspace:
   root: "~/.swe-agent"          # runs live under <root>/runs/<run-id>/
   clone_timeout_seconds: 120    # max git clone subprocess time
   max_repo_size_mb: 500         # refuse larger repos before cloning
+
+database:
+  path: "~/.swe-agent/swe.db"   # central DB; audit trail outlives runs
 
 retries:
   max_debug_attempts: 3         # TESTING→DEBUGGING→TESTING cycles per issue

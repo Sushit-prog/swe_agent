@@ -3,6 +3,7 @@
 from typer.testing import CliRunner
 
 from swe_agent.cli import main as cli_main
+from swe_agent.config.schema import SweAgentConfig
 
 runner = CliRunner()
 
@@ -20,7 +21,7 @@ def test_doctor_fails_when_git_missing(monkeypatch) -> None:
     assert "not found on PATH" in result.output
 
 
-def test_doctor_passes_when_git_present() -> None:
+def test_doctor_passes_when_git_present(monkeypatch) -> None:
     """Sanity: with real git available, doctor exits 0 on this machine."""
     import shutil
 
@@ -29,8 +30,10 @@ def test_doctor_passes_when_git_present() -> None:
 
         pytest.skip("git not installed on this machine")
 
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+
     result = runner.invoke(cli_main.app, ["doctor"])
-    assert result.exit_code == 0
+    assert result.exit_code == 0, result.output
     assert "PASS" in result.output
 
 
@@ -48,3 +51,40 @@ def test_doctor_handles_git_exec_failure(monkeypatch) -> None:
     assert result.exit_code == 1
     assert "git binary" in result.output
     assert "FAIL" in result.output
+
+
+def test_doctor_reports_api_key_env_without_leaking_value(monkeypatch) -> None:
+    secret = "sk-ant-DOCTOR-SENTINEL-DO-NOT-PRINT"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", secret)
+    monkeypatch.setattr(cli_main, "load_config", lambda path=None: SweAgentConfig())
+
+    result = runner.invoke(cli_main.app, ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert "API key env vars" in result.output
+    assert "ANTHROPIC_API_KEY" in result.output
+    assert secret not in result.output
+
+
+def test_doctor_fails_when_api_key_env_unset(monkeypatch) -> None:
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setattr(cli_main, "load_config", lambda path=None: SweAgentConfig())
+
+    result = runner.invoke(cli_main.app, ["doctor"])
+
+    assert result.exit_code == 1
+    assert "API key env vars" in result.output
+    assert "ANTHROPIC_API_KEY" in result.output
+    assert "not set" in result.output
+
+
+def test_doctor_uses_configured_api_key_env_name(monkeypatch) -> None:
+    cfg = SweAgentConfig(models={"planner": {"api_key_env": "CUSTOM_MODEL_KEY"}})
+    monkeypatch.setattr(cli_main, "load_config", lambda path=None: cfg)
+    monkeypatch.delenv("CUSTOM_MODEL_KEY", raising=False)
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "unused-default")
+
+    result = runner.invoke(cli_main.app, ["doctor"])
+
+    assert result.exit_code == 1
+    assert "CUSTOM_MODEL_KEY" in result.output
